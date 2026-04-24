@@ -1,6 +1,4 @@
-
 import json
-import math
 import threading
 import time
 from typing import Any
@@ -9,6 +7,7 @@ from flask import Flask, jsonify, request
 import paho.mqtt.client as mqtt
 
 OPTIONS_PATH = "/data/options.json"
+
 
 def load_options() -> dict[str, Any]:
     defaults = {
@@ -39,7 +38,10 @@ DEVICE_NAME = "CS2 GSI Bridge"
 
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 if OPTIONS.get("mqtt_username"):
-    client.username_pw_set(OPTIONS.get("mqtt_username"), OPTIONS.get("mqtt_password", ""))
+    client.username_pw_set(
+        OPTIONS.get("mqtt_username"),
+        OPTIONS.get("mqtt_password", ""),
+    )
 
 _connected = False
 _state_lock = threading.Lock()
@@ -53,6 +55,7 @@ _last_light_cache: dict[str, str] = {
     "recommended_color": "",
 }
 
+
 def on_connect(c, userdata, flags, reason_code, properties=None):
     global _connected
     _connected = reason_code == 0
@@ -60,13 +63,16 @@ def on_connect(c, userdata, flags, reason_code, properties=None):
     if _connected and OPTIONS.get("publish_discovery", True):
         publish_static_discovery()
 
+
 def on_disconnect(c, userdata, flags, reason_code, properties=None):
     global _connected
     _connected = False
     print(f"MQTT disconnected: {reason_code}", flush=True)
 
+
 client.on_connect = on_connect
 client.on_disconnect = on_disconnect
+
 
 def mqtt_loop():
     while True:
@@ -77,9 +83,11 @@ def mqtt_loop():
             print(f"MQTT loop error: {e}", flush=True)
             time.sleep(5)
 
+
 def publish(topic: str, payload: Any, retain: bool = False):
     text = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
     client.publish(topic, text, qos=1, retain=retain)
+
 
 def deep_get(data: dict, *keys, default=None):
     cur: Any = data
@@ -91,6 +99,7 @@ def deep_get(data: dict, *keys, default=None):
             return default
     return cur
 
+
 def to_float(value: Any, default: float = 0.0) -> float:
     try:
         if value is None or value == "":
@@ -98,6 +107,7 @@ def to_float(value: Any, default: float = 0.0) -> float:
         return float(value)
     except Exception:
         return default
+
 
 def sanitize_topic_part(value: str) -> str:
     out = []
@@ -110,6 +120,7 @@ def sanitize_topic_part(value: str) -> str:
     while "__" in s:
         s = s.replace("__", "_")
     return s.strip("_")
+
 
 def flatten_to_topics(prefix: str, value: Any) -> dict[str, str]:
     result: dict[str, str] = {}
@@ -134,6 +145,7 @@ def flatten_to_topics(prefix: str, value: Any) -> dict[str, str]:
     _walk("", value)
     return result
 
+
 def icon_for_path(path: str) -> str:
     p = path.lower()
     mapping = [
@@ -156,9 +168,11 @@ def icon_for_path(path: str) -> str:
             return icon
     return "mdi:information-outline"
 
+
 def friendly_name_for_path(path: str) -> str:
     parts = [part for part in path.split("/") if part]
     return "CS2 GSI Bridge " + " ".join(part.replace("_", " ").title() for part in parts)
+
 
 def publish_sensor_discovery(object_id: str, name: str, state_topic: str, icon: str, unit: str | None = None):
     payload = {
@@ -177,6 +191,7 @@ def publish_sensor_discovery(object_id: str, name: str, state_topic: str, icon: 
         payload["unit_of_measurement"] = unit
     publish(f"{DISCOVERY}/sensor/{DEVICE_ID}/{object_id}/config", payload, retain=True)
 
+
 def publish_binary_sensor_discovery(object_id: str, name: str, state_topic: str, payload_on: str, payload_off: str, icon: str):
     payload = {
         "name": name,
@@ -194,15 +209,17 @@ def publish_binary_sensor_discovery(object_id: str, name: str, state_topic: str,
     }
     publish(f"{DISCOVERY}/binary_sensor/{DEVICE_ID}/{object_id}/config", payload, retain=True)
 
+
 def publish_static_discovery():
     publish_sensor_discovery("light_mode", "CS2 GSI Bridge Light Mode", f"{BASE}/light/mode", "mdi:lightbulb-group")
     publish_sensor_discovery("light_color", "CS2 GSI Bridge Light Color", f"{BASE}/light/color", "mdi:palette")
     publish_sensor_discovery("recommended_color", "CS2 GSI Bridge Recommended Color", f"{BASE}/light/recommended_color", "mdi:palette")
     publish_sensor_discovery("blink_interval_ms", "CS2 GSI Bridge Blink Interval", f"{BASE}/light/blink_interval_ms", "mdi:lightbulb-auto", "ms")
     publish_binary_sensor_discovery("light_pulse", "CS2 GSI Bridge Light Pulse", f"{BASE}/light/pulse", "ON", "OFF", "mdi:lightbulb-on-outline")
+    publish(f"{BASE}/light/pulse", "OFF", retain=True)
+
 
 def maybe_publish_dynamic_discovery(flat_path: str, topic: str, value: str):
-    # Discover every incoming leaf as a sensor entity.
     object_id = f"state_{sanitize_topic_part(flat_path.replace('/', '_'))}"
     if object_id in _discovered_entities:
         return
@@ -217,8 +234,8 @@ def maybe_publish_dynamic_discovery(flat_path: str, topic: str, value: str):
         unit = "s"
     elif fp.endswith("flashed") or fp.endswith("smoked") or fp.endswith("burning"):
         unit = "%"
-    elif fp.endswith("round"):
-        unit = None
+    elif fp.endswith("blink_interval_ms"):
+        unit = "ms"
 
     publish_sensor_discovery(
         object_id=object_id,
@@ -229,8 +246,8 @@ def maybe_publish_dynamic_discovery(flat_path: str, topic: str, value: str):
     )
     _discovered_entities.add(object_id)
 
+
 def calc_blink_interval_ms(bomb_countdown: float) -> int:
-    # Approximation close to CS bomb beep cadence.
     if bomb_countdown <= 0:
         return 0
     if bomb_countdown > 35:
@@ -255,9 +272,9 @@ def calc_blink_interval_ms(bomb_countdown: float) -> int:
         return 190
     return 140
 
+
 def derive_light_state(data: dict[str, Any]) -> dict[str, Any]:
     round_phase = str(deep_get(data, "round", "phase", default="") or "")
-    phase_name = str(deep_get(data, "map", "phase", default="") or "")
     bomb_state = str(deep_get(data, "bomb", "state", default=deep_get(data, "round", "bomb", default="")) or "")
     bomb_countdown = to_float(deep_get(data, "bomb", "countdown", default=0))
     flashed = to_float(deep_get(data, "player", "state", "flashed", default=0))
@@ -267,7 +284,7 @@ def derive_light_state(data: dict[str, Any]) -> dict[str, Any]:
     team = str(deep_get(data, "player", "team", default="") or "")
 
     light_mode = "steady"
-    light_color = "white"
+    light_color = "off"
     blink_interval_ms = 0
 
     if bomb_state.lower() == "planted":
@@ -298,9 +315,6 @@ def derive_light_state(data: dict[str, Any]) -> dict[str, Any]:
     elif round_phase.lower() == "live":
         light_mode = "steady"
         light_color = "blue" if team.upper() == "CT" else "green" if team.upper() == "T" else "off"
-    else:
-        light_mode = "steady"
-        light_color = "off"
 
     return {
         "mode": light_mode,
@@ -309,25 +323,28 @@ def derive_light_state(data: dict[str, Any]) -> dict[str, Any]:
         "blink_interval_ms": blink_interval_ms,
     }
 
+
 def publish_if_changed(topic_key: str, payload: str, topic: str, retain: bool = True):
     if _last_light_cache.get(topic_key) == payload:
         return
     _last_light_cache[topic_key] = payload
     publish(topic, payload, retain=retain)
 
+
 def pulse_worker():
-    pulse_state = "OFF"
-    next_flip = time.monotonic()
+    pulse_state = None
+    next_flip = 0.0
 
     while True:
-        time.sleep(0.02)
+        time.sleep(0.05)
+
         with _state_lock:
             data = dict(_latest_state)
 
         if not data:
             if pulse_state != "OFF":
                 pulse_state = "OFF"
-                publish(f"{BASE}/light/pulse", "OFF", retain=False)
+                publish(f"{BASE}/light/pulse", "OFF", retain=True)
             continue
 
         derived = derive_light_state(data)
@@ -343,7 +360,7 @@ def pulse_worker():
 
         now = time.monotonic()
 
-        if mode == "blink" and blink_interval > 0:
+        if mode == "blink" and color == "red" and blink_interval > 0:
             if blink_interval >= 700:
                 on_ms = 220
             elif blink_interval >= 450:
@@ -354,19 +371,32 @@ def pulse_worker():
                 on_ms = 100
 
             off_ms = max(60, blink_interval - on_ms)
-            span = on_ms / 1000.0 if pulse_state == "OFF" else off_ms / 1000.0
 
-            if now >= next_flip:
-                pulse_state = "ON" if pulse_state == "OFF" else "OFF"
-                publish(f"{BASE}/light/pulse", pulse_state, retain=False)
-                next_flip = now + span
+            if pulse_state is None or pulse_state == "OFF":
+                if pulse_state != "ON":
+                    pulse_state = "ON"
+                    publish(f"{BASE}/light/pulse", "ON", retain=True)
+                next_flip = now + (on_ms / 1000.0)
+
+            elif now >= next_flip:
+                if pulse_state == "ON":
+                    pulse_state = "OFF"
+                    publish(f"{BASE}/light/pulse", "OFF", retain=True)
+                    next_flip = now + (off_ms / 1000.0)
+                else:
+                    pulse_state = "ON"
+                    publish(f"{BASE}/light/pulse", "ON", retain=True)
+                    next_flip = now + (on_ms / 1000.0)
+
         else:
             if pulse_state != "OFF":
                 pulse_state = "OFF"
-                publish(f"{BASE}/light/pulse", pulse_state, retain=False)
+                publish(f"{BASE}/light/pulse", "OFF", retain=True)
             next_flip = now
 
+
 app = Flask(__name__)
+
 
 def ingest_payload(data: dict[str, Any]):
     with _state_lock:
@@ -382,7 +412,6 @@ def ingest_payload(data: dict[str, Any]):
             path = topic[len(f"{BASE}/state/"):] if topic.startswith(f"{BASE}/state/") else topic
             maybe_publish_dynamic_discovery(path, topic, value)
 
-    # Stable convenience topics too:
     round_phase = deep_get(data, "round", "phase", default="")
     round_bomb = deep_get(data, "round", "bomb", default="")
     phase_name = deep_get(data, "map", "phase", default="")
@@ -397,17 +426,20 @@ def ingest_payload(data: dict[str, Any]):
     publish(f"{BASE}/bomb/state", bomb_state)
     publish(f"{BASE}/bomb/countdown", bomb_countdown)
 
+
 @app.post("/")
 def ingest_root():
     data = request.get_json(silent=True) or {}
     ingest_payload(data)
     return jsonify({"ok": True})
 
+
 @app.post("/gsi")
 def ingest_gsi():
     data = request.get_json(silent=True) or {}
     ingest_payload(data)
     return jsonify({"ok": True})
+
 
 if __name__ == "__main__":
     threading.Thread(target=mqtt_loop, daemon=True).start()
