@@ -252,16 +252,28 @@ def maybe_publish_dynamic_discovery(flat_path: str, topic: str):
 
 
 def calc_visual_period_seconds(time_left: float) -> float:
+    # Stabile Beep-Periodenfunktion über lokale 40s-Timeline
     if time_left <= 0:
         return 0.15
     return max(0.15, 0.1 + 0.9 * (time_left / 40.0))
 
 
-def derive_light_state(data: dict[str, Any]) -> dict[str, Any]:
+def infer_time_left(now: float, planted_mono: float | None) -> float:
+    if planted_mono is None:
+        return 40.0
+    elapsed = max(0.0, now - planted_mono)
+    return max(0.0, 40.0 - elapsed)
+
+
+def derive_light_state(data: dict[str, Any], now: float | None = None) -> dict[str, Any]:
+    global _bomb_planted_monotonic
+
+    if now is None:
+        now = time.monotonic()
+
     round_phase = str(deep_get(data, "round", "phase", default="") or "")
     round_bomb = str(deep_get(data, "round", "bomb", default="") or "")
     bomb_state = str(deep_get(data, "bomb", "state", default=round_bomb) or "")
-    bomb_countdown = to_float(deep_get(data, "bomb", "countdown", default=0))
     flashed = to_float(deep_get(data, "player", "state", "flashed", default=0))
     burning = to_float(deep_get(data, "player", "state", "burning", default=0))
     smoked = to_float(deep_get(data, "player", "state", "smoked", default=0))
@@ -275,35 +287,45 @@ def derive_light_state(data: dict[str, Any]) -> dict[str, Any]:
     planted = (bomb_state.lower() == "planted" or round_bomb.lower() == "planted")
 
     if planted:
-        if bomb_countdown > 0 and bomb_countdown <= 1.15:
+        time_left = infer_time_left(now, _bomb_planted_monotonic)
+
+        if time_left <= 1.15:
             light_mode = "finale"
             light_color = "red"
             blink_interval_ms = 0
         else:
             light_mode = "blink"
             light_color = "red"
-            blink_interval_ms = int(calc_visual_period_seconds(bomb_countdown if bomb_countdown > 0 else 40.0) * 1000)
+            blink_interval_ms = int(calc_visual_period_seconds(time_left) * 1000)
+
     elif bomb_state.lower() == "defused" or round_bomb.lower() == "defused":
         light_mode = "flash"
         light_color = "blue"
+
     elif bomb_state.lower() == "exploded" or round_bomb.lower() == "exploded":
         light_mode = "steady"
         light_color = "red"
+
     elif flashed > 0:
         light_mode = "flash"
         light_color = "flash_white"
+
     elif burning > 0:
         light_mode = "steady"
         light_color = "orange_red"
+
     elif smoked > 0:
         light_mode = "steady"
         light_color = "dim_white"
+
     elif health > 0 and health < 30:
         light_mode = "steady"
         light_color = "yellow"
+
     elif round_phase.lower() == "freezetime":
         light_mode = "steady"
         light_color = "blue" if team.upper() == "CT" else "green" if team.upper() == "T" else "white"
+
     elif round_phase.lower() == "live":
         light_mode = "steady"
         light_color = "blue" if team.upper() == "CT" else "green" if team.upper() == "T" else "off"
@@ -333,7 +355,7 @@ def pulse_worker():
     publish(f"{BASE}/light/pulse", "OFF", retain=True)
 
     while True:
-        time.sleep(0.03)
+        time.sleep(0.02)
 
         with _state_lock:
             data = dict(_latest_state)
@@ -346,21 +368,8 @@ def pulse_worker():
                 publish(f"{BASE}/light/pulse", "OFF", retain=True)
             continue
 
-        derived = derive_light_state(data)
-        mode = str(derived["mode"])
-        color = str(derived["color"])
-        recommended_color = str(derived["recommended_color"])
-        blink_interval_ms = int(derived["blink_interval_ms"])
-
         round_bomb = str(deep_get(data, "round", "bomb", default="") or "").lower()
         bomb_state = str(deep_get(data, "bomb", "state", default=round_bomb) or "").lower()
-        bomb_countdown = to_float(deep_get(data, "bomb", "countdown", default=0))
-
-        publish_if_changed("mode", mode, f"{BASE}/light/mode", retain=True)
-        publish_if_changed("color", color, f"{BASE}/light/color", retain=True)
-        publish_if_changed("recommended_color", recommended_color, f"{BASE}/light/recommended_color", retain=True)
-        publish_if_changed("blink_interval_ms", str(blink_interval_ms), f"{BASE}/light/blink_interval_ms", retain=True)
-
         now = time.monotonic()
         planted_now = (bomb_state == "planted" or round_bomb == "planted")
 
@@ -369,34 +378,42 @@ def pulse_worker():
             _bomb_planted_monotonic = now
             pulse_state = "OFF"
             publish(f"{BASE}/light/pulse", "OFF", retain=True)
-            next_flip = now + 0.55
+            # Start etwas früher für träge Smart-Lampen
+            next_flip = now + 0.70
 
         if not planted_now:
             planted_active = False
             _bomb_planted_monotonic = None
 
-        if mode == "blink" and color == "red" and planted_now:
-            if bomb_countdown > 0:
-                time_left = bomb_countdown
-            elif _bomb_planted_monotonic is not None:
-                elapsed = max(0.0, now - _bomb_planted_monotonic)
-                time_left = max(0.0, 40.0 - elapsed)
-            else:
-                time_left = 40.0
+        derived = derive_light_state(data, now=now)
+        mode = str(derived["mode"])
+        color = str(derived["color"])
+        recommended_color = str(derived["recommended_color"])
+        blink_interval_ms = int(derived["blink_interval_ms"])
 
+        publish_if_changed("mode", mode, f"{BASE}/light/mode", retain=True)
+        publish_if_changed("color", color, f"{BASE}/light/color", retain=True)
+        publish_if_changed("recommended_color", recommended_color, f"{BASE}/light/recommended_color", retain=True)
+        publish_if_changed("blink_interval_ms", str(blink_interval_ms), f"{BASE}/light/blink_interval_ms", retain=True)
+
+        if mode == "blink" and color == "red" and planted_now:
+            time_left = infer_time_left(now, _bomb_planted_monotonic)
             period = calc_visual_period_seconds(time_left)
-            on_time = min(0.28, max(0.13, period * 0.45))
+
+            # Sichtbarkeit erhöhen, Gesamtperiode bleibt aber stabil
+            on_time = min(0.30, max(0.14, period * 0.48))
             off_time = max(0.06, period - on_time)
 
             if now >= next_flip:
                 if pulse_state == "OFF":
                     pulse_state = "ON"
                     publish(f"{BASE}/light/pulse", "ON", retain=True)
-                    next_flip = now + on_time
+                    next_flip += on_time if next_flip > 0 else now + on_time
                 else:
                     pulse_state = "OFF"
                     publish(f"{BASE}/light/pulse", "OFF", retain=True)
-                    next_flip = now + off_time
+                    next_flip += off_time if next_flip > 0 else now + off_time
+
         else:
             if pulse_state != "OFF":
                 pulse_state = "OFF"
