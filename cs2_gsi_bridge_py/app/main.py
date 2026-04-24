@@ -274,32 +274,48 @@ def derive_light_state(data: dict[str, Any]) -> dict[str, Any]:
     light_color = "off"
     blink_interval_ms = 0
 
-    if bomb_state.lower() == "planted" or round_bomb.lower() == "planted":
-        light_mode = "blink"
-        light_color = "red"
-        # keep this as the actual visual period in ms
-        blink_interval_ms = int(calc_visual_period_seconds(bomb_countdown) * 1000)
+    planted = (bomb_state.lower() == "planted" or round_bomb.lower() == "planted")
+
+    if planted:
+        # Finale kurz vor Explosion: nicht mehr blinken, sondern spezielle Endphase
+        if bomb_countdown > 0 and bomb_countdown <= 1.15:
+            light_mode = "finale"
+            light_color = "red"
+            blink_interval_ms = 0
+        else:
+            light_mode = "blink"
+            light_color = "red"
+            # visuelle Periodendauer in ms
+            blink_interval_ms = int(calc_visual_period_seconds(bomb_countdown if bomb_countdown > 0 else 40.0) * 1000)
+
     elif bomb_state.lower() == "defused" or round_bomb.lower() == "defused":
         light_mode = "flash"
         light_color = "blue"
+
     elif bomb_state.lower() == "exploded" or round_bomb.lower() == "exploded":
         light_mode = "steady"
         light_color = "red"
+
     elif flashed > 0:
         light_mode = "flash"
         light_color = "flash_white"
+
     elif burning > 0:
         light_mode = "steady"
         light_color = "orange_red"
+
     elif smoked > 0:
         light_mode = "steady"
         light_color = "dim_white"
+
     elif health > 0 and health < 30:
         light_mode = "steady"
         light_color = "yellow"
+
     elif round_phase.lower() == "freezetime":
         light_mode = "steady"
         light_color = "blue" if team.upper() == "CT" else "green" if team.upper() == "T" else "white"
+
     elif round_phase.lower() == "live":
         light_mode = "steady"
         light_color = "blue" if team.upper() == "CT" else "green" if team.upper() == "T" else "off"
@@ -310,7 +326,6 @@ def derive_light_state(data: dict[str, Any]) -> dict[str, Any]:
         "recommended_color": light_color,
         "blink_interval_ms": blink_interval_ms,
     }
-
 
 def publish_if_changed(topic_key: str, payload: str, topic: str, retain: bool = True):
     if _last_light_cache.get(topic_key) == payload:
