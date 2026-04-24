@@ -8,6 +8,8 @@ import paho.mqtt.client as mqtt
 
 OPTIONS_PATH = "/data/options.json"
 
+app = Flask(__name__)
+
 
 def load_options() -> dict[str, Any]:
     defaults = {
@@ -250,10 +252,6 @@ def maybe_publish_dynamic_discovery(flat_path: str, topic: str):
 
 
 def calc_visual_period_seconds(time_left: float) -> float:
-    """
-    Valve-like bomb beep period:
-      period = max(0.15, 0.1 + 0.9 * (timeLeft / 40))
-    """
     if time_left <= 0:
         return 0.15
     return max(0.15, 0.1 + 0.9 * (time_left / 40.0))
@@ -277,7 +275,6 @@ def derive_light_state(data: dict[str, Any]) -> dict[str, Any]:
     planted = (bomb_state.lower() == "planted" or round_bomb.lower() == "planted")
 
     if planted:
-        # Finale kurz vor Explosion: nicht mehr blinken, sondern spezielle Endphase
         if bomb_countdown > 0 and bomb_countdown <= 1.15:
             light_mode = "finale"
             light_color = "red"
@@ -285,37 +282,28 @@ def derive_light_state(data: dict[str, Any]) -> dict[str, Any]:
         else:
             light_mode = "blink"
             light_color = "red"
-            # visuelle Periodendauer in ms
             blink_interval_ms = int(calc_visual_period_seconds(bomb_countdown if bomb_countdown > 0 else 40.0) * 1000)
-
     elif bomb_state.lower() == "defused" or round_bomb.lower() == "defused":
         light_mode = "flash"
         light_color = "blue"
-
     elif bomb_state.lower() == "exploded" or round_bomb.lower() == "exploded":
         light_mode = "steady"
         light_color = "red"
-
     elif flashed > 0:
         light_mode = "flash"
         light_color = "flash_white"
-
     elif burning > 0:
         light_mode = "steady"
         light_color = "orange_red"
-
     elif smoked > 0:
         light_mode = "steady"
         light_color = "dim_white"
-
     elif health > 0 and health < 30:
         light_mode = "steady"
         light_color = "yellow"
-
     elif round_phase.lower() == "freezetime":
         light_mode = "steady"
         light_color = "blue" if team.upper() == "CT" else "green" if team.upper() == "T" else "white"
-
     elif round_phase.lower() == "live":
         light_mode = "steady"
         light_color = "blue" if team.upper() == "CT" else "green" if team.upper() == "T" else "off"
@@ -326,6 +314,7 @@ def derive_light_state(data: dict[str, Any]) -> dict[str, Any]:
         "recommended_color": light_color,
         "blink_interval_ms": blink_interval_ms,
     }
+
 
 def publish_if_changed(topic_key: str, payload: str, topic: str, retain: bool = True):
     if _last_light_cache.get(topic_key) == payload:
@@ -380,7 +369,6 @@ def pulse_worker():
             _bomb_planted_monotonic = now
             pulse_state = "OFF"
             publish(f"{BASE}/light/pulse", "OFF", retain=True)
-            # erster sichtbarer Puls früher als vorher
             next_flip = now + 0.55
 
         if not planted_now:
@@ -397,8 +385,6 @@ def pulse_worker():
                 time_left = 40.0
 
             period = calc_visual_period_seconds(time_left)
-
-            # etwas sichtbarer für träge Smart-Lampen
             on_time = min(0.28, max(0.13, period * 0.45))
             off_time = max(0.06, period - on_time)
 
