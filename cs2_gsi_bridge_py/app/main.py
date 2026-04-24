@@ -380,14 +380,14 @@ def pulse_worker():
             _bomb_planted_monotonic = now
             pulse_state = "OFF"
             publish(f"{BASE}/light/pulse", "OFF", retain=True)
-            next_flip = now + 1.0  # first beep ~1 second after plant
+            # erster sichtbarer Puls früher als vorher
+            next_flip = now + 0.55
 
         if not planted_now:
             planted_active = False
             _bomb_planted_monotonic = None
 
         if mode == "blink" and color == "red" and planted_now:
-            # Use real countdown when available, otherwise estimate from local planted time
             if bomb_countdown > 0:
                 time_left = bomb_countdown
             elif _bomb_planted_monotonic is not None:
@@ -398,9 +398,8 @@ def pulse_worker():
 
             period = calc_visual_period_seconds(time_left)
 
-            # latency compensation for smart bulbs:
-            # keep ON a bit longer than the audio beep so the perceived flash lands closer
-            on_time = min(0.26, max(0.12, period * 0.42))
+            # etwas sichtbarer für träge Smart-Lampen
+            on_time = min(0.28, max(0.13, period * 0.45))
             off_time = max(0.06, period - on_time)
 
             if now >= next_flip:
@@ -417,9 +416,6 @@ def pulse_worker():
                 pulse_state = "OFF"
                 publish(f"{BASE}/light/pulse", "OFF", retain=True)
             next_flip = now
-
-
-app = Flask(__name__)
 
 
 def ingest_payload(data: dict[str, Any]):
