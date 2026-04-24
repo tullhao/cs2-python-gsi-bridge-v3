@@ -152,6 +152,7 @@ def icon_for_path(path: str) -> str:
         ("bomb/countdown", "mdi:timer-outline"),
         ("bomb/state", "mdi:bomb"),
         ("round/phase", "mdi:flag-outline"),
+        ("round/bomb", "mdi:bomb"),
         ("phase_countdowns/phase_ends_in", "mdi:timer-sand"),
         ("player/state/health", "mdi:heart"),
         ("player/state/armor", "mdi:shield"),
@@ -219,7 +220,7 @@ def publish_static_discovery():
     publish(f"{BASE}/light/pulse", "OFF", retain=True)
 
 
-def maybe_publish_dynamic_discovery(flat_path: str, topic: str, value: str):
+def maybe_publish_dynamic_discovery(flat_path: str, topic: str):
     object_id = f"state_{sanitize_topic_part(flat_path.replace('/', '_'))}"
     if object_id in _discovered_entities:
         return
@@ -249,7 +250,7 @@ def maybe_publish_dynamic_discovery(flat_path: str, topic: str, value: str):
 
 def calc_blink_interval_ms(bomb_countdown: float) -> int:
     if bomb_countdown <= 0:
-        return 0
+        return 700
     if bomb_countdown > 35:
         return 950
     if bomb_countdown > 30:
@@ -275,7 +276,8 @@ def calc_blink_interval_ms(bomb_countdown: float) -> int:
 
 def derive_light_state(data: dict[str, Any]) -> dict[str, Any]:
     round_phase = str(deep_get(data, "round", "phase", default="") or "")
-    bomb_state = str(deep_get(data, "bomb", "state", default=deep_get(data, "round", "bomb", default="")) or "")
+    round_bomb = str(deep_get(data, "round", "bomb", default="") or "")
+    bomb_state = str(deep_get(data, "bomb", "state", default=round_bomb) or "")
     bomb_countdown = to_float(deep_get(data, "bomb", "countdown", default=0))
     flashed = to_float(deep_get(data, "player", "state", "flashed", default=0))
     burning = to_float(deep_get(data, "player", "state", "burning", default=0))
@@ -287,14 +289,14 @@ def derive_light_state(data: dict[str, Any]) -> dict[str, Any]:
     light_color = "off"
     blink_interval_ms = 0
 
-    if bomb_state.lower() == "planted":
+    if bomb_state.lower() == "planted" or round_bomb.lower() == "planted":
         light_mode = "blink"
         light_color = "red"
         blink_interval_ms = calc_blink_interval_ms(bomb_countdown)
-    elif bomb_state.lower() == "defused":
+    elif bomb_state.lower() == "defused" or round_bomb.lower() == "defused":
         light_mode = "flash"
         light_color = "blue"
-    elif bomb_state.lower() == "exploded":
+    elif bomb_state.lower() == "exploded" or round_bomb.lower() == "exploded":
         light_mode = "steady"
         light_color = "red"
     elif flashed > 0:
@@ -332,8 +334,10 @@ def publish_if_changed(topic_key: str, payload: str, topic: str, retain: bool = 
 
 
 def pulse_worker():
-    pulse_state = None
+    pulse_state = "OFF"
     next_flip = 0.0
+
+    publish(f"{BASE}/light/pulse", "OFF", retain=True)
 
     while True:
         time.sleep(0.05)
@@ -360,34 +364,29 @@ def pulse_worker():
 
         now = time.monotonic()
 
-        if mode == "blink" and color == "red" and blink_interval > 0:
-            if blink_interval >= 700:
+        if mode == "blink" and color == "red":
+            interval = blink_interval if blink_interval > 0 else 700
+
+            if interval >= 700:
                 on_ms = 220
-            elif blink_interval >= 450:
+            elif interval >= 450:
                 on_ms = 180
-            elif blink_interval >= 260:
+            elif interval >= 260:
                 on_ms = 130
             else:
                 on_ms = 100
 
-            off_ms = max(60, blink_interval - on_ms)
+            off_ms = max(60, interval - on_ms)
 
-            if pulse_state is None or pulse_state == "OFF":
-                if pulse_state != "ON":
-                    pulse_state = "ON"
-                    publish(f"{BASE}/light/pulse", "ON", retain=True)
-                next_flip = now + (on_ms / 1000.0)
-
-            elif now >= next_flip:
-                if pulse_state == "ON":
-                    pulse_state = "OFF"
-                    publish(f"{BASE}/light/pulse", "OFF", retain=True)
-                    next_flip = now + (off_ms / 1000.0)
-                else:
+            if now >= next_flip:
+                if pulse_state == "OFF":
                     pulse_state = "ON"
                     publish(f"{BASE}/light/pulse", "ON", retain=True)
                     next_flip = now + (on_ms / 1000.0)
-
+                else:
+                    pulse_state = "OFF"
+                    publish(f"{BASE}/light/pulse", "OFF", retain=True)
+                    next_flip = now + (off_ms / 1000.0)
         else:
             if pulse_state != "OFF":
                 pulse_state = "OFF"
@@ -410,7 +409,7 @@ def ingest_payload(data: dict[str, Any]):
         publish(topic, value, retain=False)
         if OPTIONS.get("publish_discovery", True):
             path = topic[len(f"{BASE}/state/"):] if topic.startswith(f"{BASE}/state/") else topic
-            maybe_publish_dynamic_discovery(path, topic, value)
+            maybe_publish_dynamic_discovery(path, topic)
 
     round_phase = deep_get(data, "round", "phase", default="")
     round_bomb = deep_get(data, "round", "bomb", default="")
