@@ -54,6 +54,7 @@ _last_light_cache: dict[str, str] = {
     "blink_interval_ms": "",
     "recommended_color": "",
 }
+_bomb_planted_monotonic: float | None = None
 
 
 def on_connect(c, userdata, flags, reason_code, properties=None):
@@ -248,30 +249,14 @@ def maybe_publish_dynamic_discovery(flat_path: str, topic: str):
     _discovered_entities.add(object_id)
 
 
-def calc_blink_interval_ms(bomb_countdown: float) -> int:
-    if bomb_countdown <= 0:
-        return 700
-    if bomb_countdown > 35:
-        return 950
-    if bomb_countdown > 30:
-        return 900
-    if bomb_countdown > 25:
-        return 820
-    if bomb_countdown > 20:
-        return 720
-    if bomb_countdown > 15:
-        return 610
-    if bomb_countdown > 12:
-        return 520
-    if bomb_countdown > 9:
-        return 430
-    if bomb_countdown > 7:
-        return 340
-    if bomb_countdown > 5:
-        return 260
-    if bomb_countdown > 3:
-        return 190
-    return 140
+def calc_visual_period_seconds(time_left: float) -> float:
+    """
+    Valve-like bomb beep period:
+      period = max(0.15, 0.1 + 0.9 * (timeLeft / 40))
+    """
+    if time_left <= 0:
+        return 0.15
+    return max(0.15, 0.1 + 0.9 * (time_left / 40.0))
 
 
 def derive_light_state(data: dict[str, Any]) -> dict[str, Any]:
@@ -292,7 +277,8 @@ def derive_light_state(data: dict[str, Any]) -> dict[str, Any]:
     if bomb_state.lower() == "planted" or round_bomb.lower() == "planted":
         light_mode = "blink"
         light_color = "red"
-        blink_interval_ms = calc_blink_interval_ms(bomb_countdown)
+        # keep this as the actual visual period in ms
+        blink_interval_ms = int(calc_visual_period_seconds(bomb_countdown) * 1000)
     elif bomb_state.lower() == "defused" or round_bomb.lower() == "defused":
         light_mode = "flash"
         light_color = "blue"
@@ -334,18 +320,23 @@ def publish_if_changed(topic_key: str, payload: str, topic: str, retain: bool = 
 
 
 def pulse_worker():
+    global _bomb_planted_monotonic
+
     pulse_state = "OFF"
     next_flip = 0.0
+    planted_active = False
 
     publish(f"{BASE}/light/pulse", "OFF", retain=True)
 
     while True:
-        time.sleep(0.05)
+        time.sleep(0.03)
 
         with _state_lock:
             data = dict(_latest_state)
 
         if not data:
+            planted_active = False
+            _bomb_planted_monotonic = None
             if pulse_state != "OFF":
                 pulse_state = "OFF"
                 publish(f"{BASE}/light/pulse", "OFF", retain=True)
@@ -355,38 +346,57 @@ def pulse_worker():
         mode = str(derived["mode"])
         color = str(derived["color"])
         recommended_color = str(derived["recommended_color"])
-        blink_interval = int(derived["blink_interval_ms"])
+        blink_interval_ms = int(derived["blink_interval_ms"])
+
+        round_bomb = str(deep_get(data, "round", "bomb", default="") or "").lower()
+        bomb_state = str(deep_get(data, "bomb", "state", default=round_bomb) or "").lower()
+        bomb_countdown = to_float(deep_get(data, "bomb", "countdown", default=0))
 
         publish_if_changed("mode", mode, f"{BASE}/light/mode", retain=True)
         publish_if_changed("color", color, f"{BASE}/light/color", retain=True)
         publish_if_changed("recommended_color", recommended_color, f"{BASE}/light/recommended_color", retain=True)
-        publish_if_changed("blink_interval_ms", str(blink_interval), f"{BASE}/light/blink_interval_ms", retain=True)
+        publish_if_changed("blink_interval_ms", str(blink_interval_ms), f"{BASE}/light/blink_interval_ms", retain=True)
 
         now = time.monotonic()
+        planted_now = (bomb_state == "planted" or round_bomb == "planted")
 
-        if mode == "blink" and color == "red":
-            interval = blink_interval if blink_interval > 0 else 700
+        if planted_now and not planted_active:
+            planted_active = True
+            _bomb_planted_monotonic = now
+            pulse_state = "OFF"
+            publish(f"{BASE}/light/pulse", "OFF", retain=True)
+            next_flip = now + 1.0  # first beep ~1 second after plant
 
-            if interval >= 700:
-                on_ms = 220
-            elif interval >= 450:
-                on_ms = 180
-            elif interval >= 260:
-                on_ms = 130
+        if not planted_now:
+            planted_active = False
+            _bomb_planted_monotonic = None
+
+        if mode == "blink" and color == "red" and planted_now:
+            # Use real countdown when available, otherwise estimate from local planted time
+            if bomb_countdown > 0:
+                time_left = bomb_countdown
+            elif _bomb_planted_monotonic is not None:
+                elapsed = max(0.0, now - _bomb_planted_monotonic)
+                time_left = max(0.0, 40.0 - elapsed)
             else:
-                on_ms = 100
+                time_left = 40.0
 
-            off_ms = max(60, interval - on_ms)
+            period = calc_visual_period_seconds(time_left)
+
+            # latency compensation for smart bulbs:
+            # keep ON a bit longer than the audio beep so the perceived flash lands closer
+            on_time = min(0.26, max(0.12, period * 0.42))
+            off_time = max(0.06, period - on_time)
 
             if now >= next_flip:
                 if pulse_state == "OFF":
                     pulse_state = "ON"
                     publish(f"{BASE}/light/pulse", "ON", retain=True)
-                    next_flip = now + (on_ms / 1000.0)
+                    next_flip = now + on_time
                 else:
                     pulse_state = "OFF"
                     publish(f"{BASE}/light/pulse", "OFF", retain=True)
-                    next_flip = now + (off_ms / 1000.0)
+                    next_flip = now + off_time
         else:
             if pulse_state != "OFF":
                 pulse_state = "OFF"
