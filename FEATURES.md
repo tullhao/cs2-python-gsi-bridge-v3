@@ -1,33 +1,22 @@
 # Features
 
 ## Core bridge
-- Python addon for Home Assistant OS
-- receives CS2 GSI over HTTP
-- publishes raw state and flattened state over MQTT
-- auto-publishes MQTT discovery entities
-- derived light state output for HA automations
+- Python Home Assistant addon
+- CS2 GSI HTTP receiver
+- MQTT raw + flattened publishing
+- MQTT discovery publishing
+- derived light entities for HA logic
 
-## Bomb features
-- planted bomb blink
-- perceived beep-aligned blink behavior
+## Home Assistant TVLED layer
+- bomb timer blink
 - exploded red hold
 - defused blue blink
-
-## Team features
-- CT blue
-- T green
-- freezetime full brightness
-- live round dim brightness
-
-## Player effects
-- flashed white overlay
-- burning orange/red flicker
-- smoked dim overlay
+- freezetime team color
+- live round team color
+- flash overlay with restore
+- burning flicker
+- smoke dim overlay
 - low HP breathing
-- critical HP red breathing
-- damage boost effect
-
-## Home Assistant behavior
-- context restore after temporary effects
-- bomb timer priority preserved
-- modular scripts and automations
+- critical HP breathing
+- damage boost
+- restore-context logic

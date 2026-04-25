@@ -1,0 +1,901 @@
+# CS2 TVLED Home Assistant package
+# ============================================================
+# REQUIRED CUSTOMIZATION BEFORE USE
+# ============================================================
+# 1) Replace every occurrence of:
+#      light.YOUR_TVLED_ENTITY
+#    with your real TV LED light entity ID.
+#
+#    Example:
+#      light.cozylife_8nqa_light_2
+#
+# 2) Verify your bridge entity IDs in:
+#      Developer Tools -> States
+#
+#    Search for:
+#      cs2_gsi_bridge
+#
+#    This package currently uses the common "double-prefix" style:
+#      sensor.cs2_gsi_bridge_cs2_gsi_bridge_...
+#      binary_sensor.cs2_gsi_bridge_cs2_gsi_bridge_...
+#
+#    If your addon exposes different IDs, do a global replace.
+#
+# 3) Put this file into:
+#      /config/packages/cs2_tvled_package.yaml
+#
+# 4) Make sure packages are enabled in configuration.yaml:
+#
+#    homeassistant:
+#      packages: !include_dir_named packages
+#
+# ============================================================
+
+script:
+  cs2_bridge_apply_tvled_state:
+    alias: CS2 Bridge - Apply TVLED State
+    mode: restart
+    sequence:
+      - variables:
+          bomb: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_bomb') | lower }}"
+          round_phase: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_phase') | lower }}"
+          team: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team') | upper }}"
+          hp: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health') | int(0) }}"
+          flashed: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_flashed') | float(0) }}"
+          burning: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_burning') | float(0) }}"
+          smoked: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_smoked') | float(0) }}"
+          light_mode: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_mode') | lower }}"
+          light_color: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_color') | lower }}"
+
+      - choose:
+          # Bombtimer / bomb states / flash / burning are handled separately
+          - conditions:
+              - condition: template
+                value_template: "{{ light_mode == 'blink' and light_color == 'red' }}"
+            sequence:
+              - stop: Bombtimer active
+
+          - conditions:
+              - condition: template
+                value_template: "{{ bomb == 'exploded' }}"
+            sequence:
+              - stop: Exploded active
+
+          - conditions:
+              - condition: template
+                value_template: "{{ bomb == 'defused' }}"
+            sequence:
+              - stop: Defused active
+
+          - conditions:
+              - condition: template
+                value_template: "{{ flashed > 0 }}"
+            sequence:
+              - stop: Flash active
+
+          - conditions:
+              - condition: template
+                value_template: "{{ burning > 0 }}"
+            sequence:
+              - stop: Burning active
+
+          # Smoke should be more visible than normal round-state and override low-HP base color
+          - conditions:
+              - condition: template
+                value_template: "{{ smoked > 0 and team == 'CT' }}"
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: light.YOUR_TVLED_ENTITY
+                data:
+                  brightness_pct: 12
+                  hs_color: [240, 100]
+
+          - conditions:
+              - condition: template
+                value_template: "{{ smoked > 0 and team == 'T' }}"
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: light.YOUR_TVLED_ENTITY
+                data:
+                  brightness_pct: 12
+                  hs_color: [120, 100]
+
+          # Low HP is handled by dedicated scripts
+          - conditions:
+              - condition: template
+                value_template: "{{ hp > 0 and hp < 30 }}"
+            sequence:
+              - stop: Low HP active
+
+          # Freeze time = full team color
+          - conditions:
+              - condition: template
+                value_template: "{{ round_phase == 'freezetime' and team == 'CT' }}"
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: light.YOUR_TVLED_ENTITY
+                data:
+                  brightness_pct: 100
+                  hs_color: [240, 100]
+
+          - conditions:
+              - condition: template
+                value_template: "{{ round_phase == 'freezetime' and team == 'T' }}"
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: light.YOUR_TVLED_ENTITY
+                data:
+                  brightness_pct: 100
+                  hs_color: [120, 100]
+
+          # Live / normal round = dim team color
+          - conditions:
+              - condition: template
+                value_template: "{{ team == 'CT' }}"
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: light.YOUR_TVLED_ENTITY
+                data:
+                  brightness_pct: 35
+                  hs_color: [240, 100]
+
+          - conditions:
+              - condition: template
+                value_template: "{{ team == 'T' }}"
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: light.YOUR_TVLED_ENTITY
+                data:
+                  brightness_pct: 35
+                  hs_color: [120, 100]
+
+        default:
+          - service: light.turn_off
+            target:
+              entity_id: light.YOUR_TVLED_ENTITY
+
+  cs2_bridge_restore_context_tvled:
+    alias: CS2 Bridge - Restore Context TVLED
+    mode: restart
+    sequence:
+      - service: script.turn_off
+        target:
+          entity_id:
+            - script.cs2_bridge_low_hp_team_breath_tvled
+            - script.cs2_bridge_critical_hp_red_breath_tvled
+            - script.cs2_bridge_burning_flicker_tvled
+
+      - variables:
+          round_phase: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_phase') | lower }}"
+          team: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team') | upper }}"
+          hp: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health') | int(0) }}"
+          flashed: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_flashed') | float(0) }}"
+          burning: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_burning') | float(0) }}"
+          smoked: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_smoked') | float(0) }}"
+          light_mode: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_mode') | lower }}"
+          light_color: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_color') | lower }}"
+          pulse: "{{ states('binary_sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_pulse') | lower }}"
+
+      - choose:
+          # Bombtimer restore (important: perceived beep alignment is inverted here)
+          - conditions:
+              - condition: template
+                value_template: "{{ light_mode == 'blink' and light_color == 'red' }}"
+            sequence:
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ pulse == 'off' }}"
+                    sequence:
+                      - service: light.turn_on
+                        target:
+                          entity_id: light.YOUR_TVLED_ENTITY
+                        data:
+                          brightness_pct: 100
+                          rgb_color: [255, 0, 0]
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ pulse == 'on' }}"
+                    sequence:
+                      - service: light.turn_off
+                        target:
+                          entity_id: light.YOUR_TVLED_ENTITY
+
+          - conditions:
+              - condition: template
+                value_template: "{{ flashed > 0 }}"
+            sequence:
+              - stop: Flash still active
+
+          - conditions:
+              - condition: template
+                value_template: "{{ burning > 0 }}"
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: light.YOUR_TVLED_ENTITY
+                data:
+                  brightness_pct: 80
+                  rgb_color: [255, 80, 0]
+                  transition: 1.0
+              - delay:
+                  seconds: 1
+              - service: script.turn_on
+                target:
+                  entity_id: script.cs2_bridge_burning_flicker_tvled
+
+          # Smoke should win over low-HP ambient logic
+          - conditions:
+              - condition: template
+                value_template: "{{ smoked > 0 and team == 'CT' }}"
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: light.YOUR_TVLED_ENTITY
+                data:
+                  brightness_pct: 12
+                  hs_color: [240, 100]
+                  transition: 1.0
+
+          - conditions:
+              - condition: template
+                value_template: "{{ smoked > 0 and team == 'T' }}"
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: light.YOUR_TVLED_ENTITY
+                data:
+                  brightness_pct: 12
+                  hs_color: [120, 100]
+                  transition: 1.0
+
+          - conditions:
+              - condition: numeric_state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+                below: 16
+              - condition: numeric_state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+                above: 0
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: light.YOUR_TVLED_ENTITY
+                data:
+                  brightness_pct: 50
+                  hs_color: [0, 100]
+                  transition: 1.0
+              - delay:
+                  seconds: 1
+              - service: script.turn_on
+                target:
+                  entity_id: script.cs2_bridge_critical_hp_red_breath_tvled
+
+          - conditions:
+              - condition: numeric_state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+                above: 15
+              - condition: numeric_state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+                below: 30
+            sequence:
+              - choose:
+                  - conditions:
+                      - condition: state
+                        entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team
+                        state: "CT"
+                    sequence:
+                      - service: light.turn_on
+                        target:
+                          entity_id: light.YOUR_TVLED_ENTITY
+                        data:
+                          brightness_pct: 35
+                          hs_color: [240, 100]
+                          transition: 1.0
+                  - conditions:
+                      - condition: state
+                        entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team
+                        state: "T"
+                    sequence:
+                      - service: light.turn_on
+                        target:
+                          entity_id: light.YOUR_TVLED_ENTITY
+                        data:
+                          brightness_pct: 35
+                          hs_color: [120, 100]
+                          transition: 1.0
+              - delay:
+                  seconds: 1
+              - service: script.turn_on
+                target:
+                  entity_id: script.cs2_bridge_low_hp_team_breath_tvled
+
+          - conditions:
+              - condition: state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_phase
+                state: "freezetime"
+              - condition: state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team
+                state: "CT"
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: light.YOUR_TVLED_ENTITY
+                data:
+                  brightness_pct: 100
+                  hs_color: [240, 100]
+                  transition: 1.0
+
+          - conditions:
+              - condition: state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_phase
+                state: "freezetime"
+              - condition: state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team
+                state: "T"
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: light.YOUR_TVLED_ENTITY
+                data:
+                  brightness_pct: 100
+                  hs_color: [120, 100]
+                  transition: 1.0
+
+          - conditions:
+              - condition: state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team
+                state: "CT"
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: light.YOUR_TVLED_ENTITY
+                data:
+                  brightness_pct: 35
+                  hs_color: [240, 100]
+                  transition: 1.0
+
+          - conditions:
+              - condition: state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team
+                state: "T"
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: light.YOUR_TVLED_ENTITY
+                data:
+                  brightness_pct: 35
+                  hs_color: [120, 100]
+                  transition: 1.0
+
+        default:
+          - service: light.turn_off
+            target:
+              entity_id: light.YOUR_TVLED_ENTITY
+
+  cs2_bridge_burning_flicker_tvled:
+    alias: CS2 Bridge - Burning Flicker TVLED
+    mode: restart
+    sequence:
+      - repeat:
+          while:
+            - condition: template
+              value_template: >
+                {{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_burning') | float(0) > 0
+                   and states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_flashed') | float(0) < 1
+                   and states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_mode') | lower not in ['blink', 'finale']
+                   and states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_bomb') | lower not in ['defused', 'exploded'] }}
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.YOUR_TVLED_ENTITY
+              data:
+                brightness_pct: 100
+                rgb_color: [255, 80, 0]
+            - delay:
+                milliseconds: 280
+            - service: light.turn_on
+              target:
+                entity_id: light.YOUR_TVLED_ENTITY
+              data:
+                brightness_pct: 70
+                rgb_color: [255, 20, 0]
+            - delay:
+                milliseconds: 220
+            - service: light.turn_on
+              target:
+                entity_id: light.YOUR_TVLED_ENTITY
+              data:
+                brightness_pct: 95
+                rgb_color: [255, 120, 0]
+            - delay:
+                milliseconds: 180
+            - service: light.turn_on
+              target:
+                entity_id: light.YOUR_TVLED_ENTITY
+              data:
+                brightness_pct: 60
+                rgb_color: [190, 10, 0]
+            - delay:
+                milliseconds: 280
+
+  cs2_bridge_low_hp_team_breath_tvled:
+    alias: CS2 Bridge - Low HP Team Breath TVLED
+    mode: restart
+    sequence:
+      - repeat:
+          while:
+            - condition: numeric_state
+              entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+              above: 15
+            - condition: numeric_state
+              entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+              below: 30
+          sequence:
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team
+                      state: "CT"
+                  sequence:
+                    - service: light.turn_on
+                      target:
+                        entity_id: light.YOUR_TVLED_ENTITY
+                      data:
+                        brightness_pct: 35
+                        hs_color: [240, 100]
+                        transition: 1.5
+                    - delay:
+                        milliseconds: 1600
+                    - service: light.turn_on
+                      target:
+                        entity_id: light.YOUR_TVLED_ENTITY
+                      data:
+                        brightness_pct: 5
+                        hs_color: [240, 100]
+                        transition: 1.0
+                    - delay:
+                        milliseconds: 1100
+
+                - conditions:
+                    - condition: state
+                      entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team
+                      state: "T"
+                  sequence:
+                    - service: light.turn_on
+                      target:
+                        entity_id: light.YOUR_TVLED_ENTITY
+                      data:
+                        brightness_pct: 35
+                        hs_color: [120, 100]
+                        transition: 1.5
+                    - delay:
+                        milliseconds: 1600
+                    - service: light.turn_on
+                      target:
+                        entity_id: light.YOUR_TVLED_ENTITY
+                      data:
+                        brightness_pct: 5
+                        hs_color: [120, 100]
+                        transition: 1.0
+                    - delay:
+                        milliseconds: 1100
+
+              default:
+                - delay:
+                    milliseconds: 500
+
+  cs2_bridge_critical_hp_red_breath_tvled:
+    alias: CS2 Bridge - Critical HP Red Breath TVLED
+    mode: restart
+    sequence:
+      - repeat:
+          while:
+            - condition: numeric_state
+              entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+              above: 0
+            - condition: numeric_state
+              entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+              below: 16
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.YOUR_TVLED_ENTITY
+              data:
+                brightness_pct: 100
+                hs_color: [0, 100]
+                transition: 1.5
+            - delay:
+                milliseconds: 1600
+            - service: light.turn_on
+              target:
+                entity_id: light.YOUR_TVLED_ENTITY
+              data:
+                brightness_pct: 5
+                hs_color: [0, 100]
+                transition: 1.0
+            - delay:
+                milliseconds: 1100
+
+  cs2_bridge_defused_blue_blink_tvled:
+    alias: CS2 Bridge - Defused Blue Blink TVLED
+    mode: restart
+    sequence:
+      - repeat:
+          count: 5
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.YOUR_TVLED_ENTITY
+              data:
+                brightness_pct: 100
+                hs_color: [240, 100]
+            - delay:
+                milliseconds: 300
+            - service: light.turn_off
+              target:
+                entity_id: light.YOUR_TVLED_ENTITY
+            - delay:
+                milliseconds: 300
+      - service: script.turn_on
+        target:
+          entity_id: script.cs2_bridge_restore_context_tvled
+
+automation:
+  - id: cs2_bridge_apply_tvled_state_on_change
+    alias: CS2 Bridge - Apply TVLED State on Change
+    trigger:
+      - platform: state
+        entity_id:
+          - sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_phase
+          - sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team
+          - sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_smoked
+          - sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_bomb
+          - sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_mode
+          - sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_color
+    action:
+      - service: script.turn_on
+        target:
+          entity_id: script.cs2_bridge_apply_tvled_state
+    mode: restart
+
+  - id: cs2_bridge_bombtimer_einzig_tvled
+    alias: CS2 Bridge - Bombtimer einzig TVLED
+    trigger:
+      - platform: state
+        entity_id:
+          - binary_sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_pulse
+          - sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_mode
+          - sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_color
+          - sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_flashed
+    action:
+      - choose:
+          - conditions:
+              - condition: numeric_state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_flashed
+                above: 0
+            sequence:
+              - stop: Flash overlay active
+
+          # Perceived bomb beep alignment: pulse OFF = lamp ON, pulse ON = lamp OFF
+          - conditions:
+              - condition: state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_mode
+                state: "blink"
+              - condition: state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_color
+                state: "red"
+              - condition: state
+                entity_id: binary_sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_pulse
+                state: "off"
+            sequence:
+              - service: script.turn_off
+                target:
+                  entity_id:
+                    - script.cs2_bridge_restore_context_tvled
+                    - script.cs2_bridge_apply_tvled_state
+                    - script.cs2_bridge_low_hp_team_breath_tvled
+                    - script.cs2_bridge_critical_hp_red_breath_tvled
+                    - script.cs2_bridge_burning_flicker_tvled
+              - service: light.turn_on
+                target:
+                  entity_id: light.YOUR_TVLED_ENTITY
+                data:
+                  brightness_pct: 100
+                  rgb_color: [255, 0, 0]
+
+          - conditions:
+              - condition: state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_mode
+                state: "blink"
+              - condition: state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_color
+                state: "red"
+              - condition: state
+                entity_id: binary_sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_pulse
+                state: "on"
+            sequence:
+              - service: script.turn_off
+                target:
+                  entity_id:
+                    - script.cs2_bridge_restore_context_tvled
+                    - script.cs2_bridge_apply_tvled_state
+                    - script.cs2_bridge_low_hp_team_breath_tvled
+                    - script.cs2_bridge_critical_hp_red_breath_tvled
+                    - script.cs2_bridge_burning_flicker_tvled
+              - service: light.turn_off
+                target:
+                  entity_id: light.YOUR_TVLED_ENTITY
+
+        default:
+          - stop: Not in bombtimer mode
+    mode: restart
+
+  - id: cs2_bridge_bomb_exploded_rot_kurz_tvled
+    alias: CS2 Bridge - Bomb exploded rot kurz TVLED
+    trigger:
+      - platform: state
+        entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_bomb
+        to: "exploded"
+    action:
+      - service: script.turn_off
+        target:
+          entity_id:
+            - script.cs2_bridge_low_hp_team_breath_tvled
+            - script.cs2_bridge_critical_hp_red_breath_tvled
+            - script.cs2_bridge_burning_flicker_tvled
+      - service: light.turn_on
+        target:
+          entity_id: light.YOUR_TVLED_ENTITY
+        data:
+          brightness_pct: 100
+          rgb_color: [255, 0, 0]
+      - delay:
+          seconds: 5
+      - service: script.turn_on
+        target:
+          entity_id: script.cs2_bridge_restore_context_tvled
+    mode: restart
+
+  - id: cs2_bridge_bomb_defused_blau_blinken_tvled
+    alias: CS2 Bridge - Bomb defused blau blinken TVLED
+    trigger:
+      - platform: state
+        entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_bomb
+        to: "defused"
+    action:
+      - service: script.turn_off
+        target:
+          entity_id:
+            - script.cs2_bridge_low_hp_team_breath_tvled
+            - script.cs2_bridge_critical_hp_red_breath_tvled
+            - script.cs2_bridge_burning_flicker_tvled
+      - service: script.turn_on
+        target:
+          entity_id: script.cs2_bridge_defused_blue_blink_tvled
+    mode: restart
+
+  - id: cs2_bridge_burning_start_tvled
+    alias: CS2 Bridge - Burning Start TVLED
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_burning
+        above: 0
+    condition:
+      - condition: numeric_state
+        entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_flashed
+        below: 1
+      - condition: template
+        value_template: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_mode') | lower not in ['blink'] }}"
+      - condition: template
+        value_template: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_bomb') | lower not in ['defused', 'exploded'] }}"
+    action:
+      - service: script.turn_off
+        target:
+          entity_id:
+            - script.cs2_bridge_low_hp_team_breath_tvled
+            - script.cs2_bridge_critical_hp_red_breath_tvled
+      - service: script.turn_on
+        target:
+          entity_id: script.cs2_bridge_burning_flicker_tvled
+    mode: restart
+
+  - id: cs2_bridge_burning_ende_tvled
+    alias: CS2 Bridge - Burning Ende TVLED
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_burning
+        below: 1
+    action:
+      - service: script.turn_off
+        target:
+          entity_id: script.cs2_bridge_burning_flicker_tvled
+      - service: script.turn_on
+        target:
+          entity_id: script.cs2_bridge_restore_context_tvled
+    mode: restart
+
+  - id: cs2_bridge_flashed_kurzer_flash_tvled
+    alias: CS2 Bridge - Flashed kurzer Flash TVLED
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_flashed
+        above: 0
+    action:
+      - service: script.turn_off
+        target:
+          entity_id:
+            - script.cs2_bridge_low_hp_team_breath_tvled
+            - script.cs2_bridge_critical_hp_red_breath_tvled
+            - script.cs2_bridge_burning_flicker_tvled
+            - script.cs2_bridge_restore_context_tvled
+      - service: light.turn_on
+        target:
+          entity_id: light.YOUR_TVLED_ENTITY
+        data:
+          brightness_pct: 100
+          color_temp_kelvin: 6500
+      - delay:
+          milliseconds: 1400
+      - wait_for_trigger:
+          - platform: numeric_state
+            entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_flashed
+            below: 1
+        timeout: "00:00:02"
+        continue_on_timeout: true
+      - service: script.turn_on
+        target:
+          entity_id: script.cs2_bridge_restore_context_tvled
+    mode: restart
+
+  - id: cs2_bridge_low_hp_controller_tvled
+    alias: CS2 Bridge - Low HP Controller TVLED
+    trigger:
+      - platform: state
+        entity_id:
+          - sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+          - sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team
+          - sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_flashed
+          - sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_burning
+          - sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_smoked
+          - sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_mode
+          - sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_bomb
+          - sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_phase
+    action:
+      - service: script.turn_off
+        target:
+          entity_id:
+            - script.cs2_bridge_low_hp_team_breath_tvled
+            - script.cs2_bridge_critical_hp_red_breath_tvled
+
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >
+                  {{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_mode') | lower in ['blink']
+                     or states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_bomb') | lower in ['exploded', 'defused']
+                     or states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_flashed') | float(0) > 0
+                     or states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_burning') | float(0) > 0
+                     or states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_smoked') | float(0) > 0 }}
+            sequence:
+              - stop: Higher priority active
+
+          - conditions:
+              - condition: numeric_state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+                above: 0
+              - condition: numeric_state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+                below: 16
+            sequence:
+              - service: script.turn_on
+                target:
+                  entity_id: script.cs2_bridge_critical_hp_red_breath_tvled
+
+          - conditions:
+              - condition: numeric_state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+                above: 15
+              - condition: numeric_state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+                below: 30
+            sequence:
+              - service: script.turn_on
+                target:
+                  entity_id: script.cs2_bridge_low_hp_team_breath_tvled
+
+        default:
+          - service: script.turn_on
+            target:
+              entity_id: script.cs2_bridge_apply_tvled_state
+    mode: restart
+
+  - id: cs2_bridge_damage_kurzer_boost_tvled
+    alias: CS2 Bridge - Damage kurzer Boost TVLED
+    trigger:
+      - platform: state
+        entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+    condition:
+      - condition: template
+        value_template: >
+          {{ trigger.from_state is not none
+             and trigger.to_state is not none
+             and trigger.from_state.state not in ['unknown','unavailable','none','None','']
+             and trigger.to_state.state not in ['unknown','unavailable','none','None','']
+             and (trigger.to_state.state | int(0)) < (trigger.from_state.state | int(0))
+             and (trigger.to_state.state | int(0)) > 0 }}
+      - condition: template
+        value_template: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_mode') | lower not in ['blink'] }}"
+      - condition: numeric_state
+        entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_flashed
+        below: 1
+      - condition: numeric_state
+        entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_burning
+        below: 1
+      - condition: template
+        value_template: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_bomb') | lower not in ['exploded', 'defused'] }}"
+    action:
+      - service: script.turn_off
+        target:
+          entity_id:
+            - script.cs2_bridge_restore_context_tvled
+            - script.cs2_bridge_low_hp_team_breath_tvled
+            - script.cs2_bridge_critical_hp_red_breath_tvled
+
+      - choose:
+          - conditions:
+              - condition: numeric_state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+                below: 16
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: light.YOUR_TVLED_ENTITY
+                data:
+                  brightness_pct: 100
+                  hs_color: [0, 100]
+
+          - conditions:
+              - condition: state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team
+                state: "CT"
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: light.YOUR_TVLED_ENTITY
+                data:
+                  brightness_pct: 100
+                  hs_color: [240, 100]
+
+          - conditions:
+              - condition: state
+                entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team
+                state: "T"
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: light.YOUR_TVLED_ENTITY
+                data:
+                  brightness_pct: 100
+                  hs_color: [120, 100]
+
+        default:
+          - service: light.turn_on
+            target:
+              entity_id: light.YOUR_TVLED_ENTITY
+            data:
+              brightness_pct: 100
+              color_temp_kelvin: 4500
+
+      - delay:
+          milliseconds: 500
+
+      - service: script.turn_on
+        target:
+          entity_id: script.cs2_bridge_restore_context_tvled
+    mode: restart
