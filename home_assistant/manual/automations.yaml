@@ -1,0 +1,3 @@
+# Manual automations helper
+Use the `automation:` section from `home_assistant/packages/cs2_tvled_package.yaml`
+if you want to create the automations manually in Home Assistant.

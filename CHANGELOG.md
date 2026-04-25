@@ -1,14 +1,9 @@
 # Changelog
 
-## Final
-- complete Home Assistant package export added
-- setup guide added for entity lookup and search/replace
-- MIT license added
-- final bomb blink kept stable
-- perceived bomb beep alignment documented
-- freezetime full team-color behavior documented
-- live dim team-color behavior documented
-- smoke kept above normal round-state in priority
-- flash overlay restore logic documented
-- burning flicker documented
-- low HP and critical HP breathing documented
+## 0.3.11
+- updated full main.py for the final repo bundle
+- bumped addon version to 0.3.11
+- added full install guide
+- added CS2 config example
+- added entity checklist
+- added manual helper files alongside the package
