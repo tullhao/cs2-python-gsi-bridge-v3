@@ -178,7 +178,13 @@ def friendly_name_for_path(path: str) -> str:
     return "CS2 GSI Bridge " + " ".join(part.replace("_", " ").title() for part in parts)
 
 
-def publish_sensor_discovery(object_id: str, name: str, state_topic: str, icon: str, unit: str | None = None):
+def publish_sensor_discovery(
+    object_id: str,
+    name: str,
+    state_topic: str,
+    icon: str,
+    unit: str | None = None,
+):
     payload = {
         "name": name,
         "unique_id": f"{DEVICE_ID}_{object_id}",
@@ -196,7 +202,14 @@ def publish_sensor_discovery(object_id: str, name: str, state_topic: str, icon: 
     publish(f"{DISCOVERY}/sensor/{DEVICE_ID}/{object_id}/config", payload, retain=True)
 
 
-def publish_binary_sensor_discovery(object_id: str, name: str, state_topic: str, payload_on: str, payload_off: str, icon: str):
+def publish_binary_sensor_discovery(
+    object_id: str,
+    name: str,
+    state_topic: str,
+    payload_on: str,
+    payload_off: str,
+    icon: str,
+):
     payload = {
         "name": name,
         "unique_id": f"{DEVICE_ID}_{object_id}",
@@ -215,11 +228,39 @@ def publish_binary_sensor_discovery(object_id: str, name: str, state_topic: str,
 
 
 def publish_static_discovery():
-    publish_sensor_discovery("light_mode", "CS2 GSI Bridge Light Mode", f"{BASE}/light/mode", "mdi:lightbulb-group")
-    publish_sensor_discovery("light_color", "CS2 GSI Bridge Light Color", f"{BASE}/light/color", "mdi:palette")
-    publish_sensor_discovery("recommended_color", "CS2 GSI Bridge Recommended Color", f"{BASE}/light/recommended_color", "mdi:palette")
-    publish_sensor_discovery("blink_interval_ms", "CS2 GSI Bridge Blink Interval", f"{BASE}/light/blink_interval_ms", "mdi:lightbulb-auto", "ms")
-    publish_binary_sensor_discovery("light_pulse", "CS2 GSI Bridge Light Pulse", f"{BASE}/light/pulse", "ON", "OFF", "mdi:lightbulb-on-outline")
+    publish_sensor_discovery(
+        "light_mode",
+        "CS2 GSI Bridge Light Mode",
+        f"{BASE}/light/mode",
+        "mdi:lightbulb-group",
+    )
+    publish_sensor_discovery(
+        "light_color",
+        "CS2 GSI Bridge Light Color",
+        f"{BASE}/light/color",
+        "mdi:palette",
+    )
+    publish_sensor_discovery(
+        "recommended_color",
+        "CS2 GSI Bridge Recommended Color",
+        f"{BASE}/light/recommended_color",
+        "mdi:palette",
+    )
+    publish_sensor_discovery(
+        "blink_interval_ms",
+        "CS2 GSI Bridge Blink Interval",
+        f"{BASE}/light/blink_interval_ms",
+        "mdi:lightbulb-auto",
+        "ms",
+    )
+    publish_binary_sensor_discovery(
+        "light_pulse",
+        "CS2 GSI Bridge Light Pulse",
+        f"{BASE}/light/pulse",
+        "ON",
+        "OFF",
+        "mdi:lightbulb-on-outline",
+    )
     publish(f"{BASE}/light/pulse", "OFF", retain=True)
 
 
@@ -252,7 +293,6 @@ def maybe_publish_dynamic_discovery(flat_path: str, topic: str):
 
 
 def calc_visual_period_seconds(time_left: float) -> float:
-    # Stabile Beep-Periodenfunktion über lokale 40s-Timeline
     if time_left <= 0:
         return 0.15
     return max(0.15, 0.1 + 0.9 * (time_left / 40.0))
@@ -286,19 +326,11 @@ def derive_light_state(data: dict[str, Any], now: float | None = None) -> dict[s
 
     planted = (bomb_state.lower() == "planted" or round_bomb.lower() == "planted")
 
-if planted:
-    light_mode = "blink"
-    light_color = "red"
-    time_left = infer_time_left(now, _bomb_planted_monotonic)
-    blink_interval_ms = int(calc_visual_period_seconds(time_left) * 1000)
-
-elif bomb_state.lower() == "defused" or round_bomb.lower() == "defused":
-    light_mode = "flash"
-    light_color = "blue"
-
-elif bomb_state.lower() == "exploded" or round_bomb.lower() == "exploded":
-    light_mode = "steady"
-    light_color = "red"
+    if planted:
+        light_mode = "blink"
+        light_color = "red"
+        time_left = infer_time_left(now, _bomb_planted_monotonic)
+        blink_interval_ms = int(calc_visual_period_seconds(time_left) * 1000)
 
     elif bomb_state.lower() == "defused" or round_bomb.lower() == "defused":
         light_mode = "flash"
@@ -380,7 +412,6 @@ def pulse_worker():
             _bomb_planted_monotonic = now
             pulse_state = "OFF"
             publish(f"{BASE}/light/pulse", "OFF", retain=True)
-            # Start etwas früher für träge Smart-Lampen
             next_flip = now + 0.70
 
         if not planted_now:
@@ -402,7 +433,6 @@ def pulse_worker():
             time_left = infer_time_left(now, _bomb_planted_monotonic)
             period = calc_visual_period_seconds(time_left)
 
-            # Sichtbarkeit erhöhen, Gesamtperiode bleibt aber stabil
             on_time = min(0.30, max(0.14, period * 0.48))
             off_time = max(0.06, period - on_time)
 
@@ -410,11 +440,11 @@ def pulse_worker():
                 if pulse_state == "OFF":
                     pulse_state = "ON"
                     publish(f"{BASE}/light/pulse", "ON", retain=True)
-                    next_flip += on_time if next_flip > 0 else now + on_time
+                    next_flip = now + on_time
                 else:
                     pulse_state = "OFF"
                     publish(f"{BASE}/light/pulse", "OFF", retain=True)
-                    next_flip += off_time if next_flip > 0 else now + off_time
+                    next_flip = now + off_time
 
         else:
             if pulse_state != "OFF":
