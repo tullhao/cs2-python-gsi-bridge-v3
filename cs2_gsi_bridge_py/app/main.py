@@ -286,17 +286,19 @@ def derive_light_state(data: dict[str, Any], now: float | None = None) -> dict[s
 
     planted = (bomb_state.lower() == "planted" or round_bomb.lower() == "planted")
 
-    if planted:
-        time_left = infer_time_left(now, _bomb_planted_monotonic)
+if planted:
+    light_mode = "blink"
+    light_color = "red"
+    time_left = infer_time_left(now, _bomb_planted_monotonic)
+    blink_interval_ms = int(calc_visual_period_seconds(time_left) * 1000)
 
-        if time_left <= 2.0:
-            light_mode = "finale"
-            light_color = "red"
-            blink_interval_ms = 0
-        else:
-            light_mode = "blink"
-            light_color = "red"
-            blink_interval_ms = int(calc_visual_period_seconds(time_left) * 1000)
+elif bomb_state.lower() == "defused" or round_bomb.lower() == "defused":
+    light_mode = "flash"
+    light_color = "blue"
+
+elif bomb_state.lower() == "exploded" or round_bomb.lower() == "exploded":
+    light_mode = "steady"
+    light_color = "red"
 
     elif bomb_state.lower() == "defused" or round_bomb.lower() == "defused":
         light_mode = "flash"
