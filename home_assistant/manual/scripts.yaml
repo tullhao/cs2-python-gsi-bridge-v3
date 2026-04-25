@@ -1,3 +1,524 @@
-# Manual scripts helper
-Use the `script:` section from `home_assistant/packages/cs2_tvled_package.yaml`
-if you want to create the scripts manually in Home Assistant.
+cs2_bridge_apply_tvled_state:
+  alias: CS2 Bridge - Apply TVLED State
+  mode: restart
+  sequence:
+    - variables:
+        bomb: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_bomb') | lower }}"
+        round_phase: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_phase') | lower }}"
+        team: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team') | upper }}"
+        hp: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health') | int(0) }}"
+        flashed: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_flashed') | float(0) }}"
+        burning: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_burning') | float(0) }}"
+        smoked: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_smoked') | float(0) }}"
+        light_mode: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_mode') | lower }}"
+        light_color: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_color') | lower }}"
+
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ light_mode == 'blink' and light_color == 'red' }}"
+          sequence:
+            - stop: Bombtimer aktiv
+
+        - conditions:
+            - condition: template
+              value_template: "{{ flashed > 0 }}"
+          sequence:
+            - stop: Flash aktiv
+
+        - conditions:
+            - condition: template
+              value_template: "{{ burning > 0 }}"
+          sequence:
+            - stop: Burning aktiv
+
+        - conditions:
+            - condition: template
+              value_template: >
+                {{ bomb in ['exploded', 'defused']
+                   and round_phase not in ['freezetime', 'live'] }}
+          sequence:
+            - stop: Bombenende aktiv
+
+        - conditions:
+            - condition: template
+              value_template: "{{ smoked > 0 and team == 'CT' }}"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.cozylife_8nqa_light_2
+              data:
+                brightness_pct: 12
+                hs_color: [240, 100]
+
+        - conditions:
+            - condition: template
+              value_template: "{{ smoked > 0 and team == 'T' }}"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.cozylife_8nqa_light_2
+              data:
+                brightness_pct: 12
+                hs_color: [120, 100]
+
+        - conditions:
+            - condition: template
+              value_template: "{{ hp > 0 and hp < 30 }}"
+          sequence:
+            - stop: Low HP aktiv
+
+        - conditions:
+            - condition: template
+              value_template: "{{ round_phase == 'freezetime' and team == 'CT' }}"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.cozylife_8nqa_light_2
+              data:
+                brightness_pct: 100
+                hs_color: [240, 100]
+
+        - conditions:
+            - condition: template
+              value_template: "{{ round_phase == 'freezetime' and team == 'T' }}"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.cozylife_8nqa_light_2
+              data:
+                brightness_pct: 100
+                hs_color: [120, 100]
+
+        - conditions:
+            - condition: template
+              value_template: "{{ round_phase == 'live' and team == 'CT' }}"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.cozylife_8nqa_light_2
+              data:
+                brightness_pct: 35
+                hs_color: [240, 100]
+
+        - conditions:
+            - condition: template
+              value_template: "{{ round_phase == 'live' and team == 'T' }}"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.cozylife_8nqa_light_2
+              data:
+                brightness_pct: 35
+                hs_color: [120, 100]
+
+        - conditions:
+            - condition: template
+              value_template: "{{ team == 'CT' }}"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.cozylife_8nqa_light_2
+              data:
+                brightness_pct: 35
+                hs_color: [240, 100]
+
+        - conditions:
+            - condition: template
+              value_template: "{{ team == 'T' }}"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.cozylife_8nqa_light_2
+              data:
+                brightness_pct: 35
+                hs_color: [120, 100]
+
+      default:
+        - service: light.turn_off
+          target:
+            entity_id: light.cozylife_8nqa_light_2
+
+cs2_bridge_restore_context_tvled:
+  alias: CS2 Bridge - Restore Context TVLED
+  mode: restart
+  sequence:
+    - service: script.turn_off
+      target:
+        entity_id:
+          - script.cs2_bridge_low_hp_team_breath_tvled
+          - script.cs2_bridge_critical_hp_red_breath_tvled
+          - script.cs2_bridge_burning_flicker_tvled
+
+    - variables:
+        round_phase: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_phase') | lower }}"
+        team: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team') | upper }}"
+        hp: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health') | int(0) }}"
+        flashed: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_flashed') | float(0) }}"
+        burning: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_burning') | float(0) }}"
+        smoked: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_smoked') | float(0) }}"
+        light_mode: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_mode') | lower }}"
+        light_color: "{{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_color') | lower }}"
+        pulse: "{{ states('binary_sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_pulse') | lower }}"
+
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ light_mode == 'blink' and light_color == 'red' }}"
+          sequence:
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: "{{ pulse == 'off' }}"
+                  sequence:
+                    - service: light.turn_on
+                      target:
+                        entity_id: light.cozylife_8nqa_light_2
+                      data:
+                        brightness_pct: 100
+                        rgb_color: [255, 0, 0]
+                - conditions:
+                    - condition: template
+                      value_template: "{{ pulse == 'on' }}"
+                  sequence:
+                    - service: light.turn_off
+                      target:
+                        entity_id: light.cozylife_8nqa_light_2
+
+        - conditions:
+            - condition: template
+              value_template: "{{ flashed > 0 }}"
+          sequence:
+            - stop: Flash noch aktiv
+
+        - conditions:
+            - condition: template
+              value_template: "{{ burning > 0 }}"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.cozylife_8nqa_light_2
+              data:
+                brightness_pct: 80
+                rgb_color: [255, 80, 0]
+                transition: 1.0
+            - delay:
+                seconds: 1
+            - service: script.turn_on
+              target:
+                entity_id: script.cs2_bridge_burning_flicker_tvled
+
+        - conditions:
+            - condition: template
+              value_template: "{{ smoked > 0 and team == 'CT' }}"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.cozylife_8nqa_light_2
+              data:
+                brightness_pct: 12
+                hs_color: [240, 100]
+                transition: 1.0
+
+        - conditions:
+            - condition: template
+              value_template: "{{ smoked > 0 and team == 'T' }}"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.cozylife_8nqa_light_2
+              data:
+                brightness_pct: 12
+                hs_color: [120, 100]
+                transition: 1.0
+
+        - conditions:
+            - condition: numeric_state
+              entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+              below: 16
+            - condition: numeric_state
+              entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+              above: 0
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.cozylife_8nqa_light_2
+              data:
+                brightness_pct: 50
+                hs_color: [0, 100]
+                transition: 1.0
+            - delay:
+                seconds: 1
+            - service: script.turn_on
+              target:
+                entity_id: script.cs2_bridge_critical_hp_red_breath_tvled
+
+        - conditions:
+            - condition: numeric_state
+              entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+              above: 15
+            - condition: numeric_state
+              entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+              below: 30
+          sequence:
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team
+                      state: "CT"
+                  sequence:
+                    - service: light.turn_on
+                      target:
+                        entity_id: light.cozylife_8nqa_light_2
+                      data:
+                        brightness_pct: 35
+                        hs_color: [240, 100]
+                        transition: 1.0
+                - conditions:
+                    - condition: state
+                      entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team
+                      state: "T"
+                  sequence:
+                    - service: light.turn_on
+                      target:
+                        entity_id: light.cozylife_8nqa_light_2
+                      data:
+                        brightness_pct: 35
+                        hs_color: [120, 100]
+                        transition: 1.0
+            - delay:
+                seconds: 1
+            - service: script.turn_on
+              target:
+                entity_id: script.cs2_bridge_low_hp_team_breath_tvled
+
+        - conditions:
+            - condition: state
+              entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_phase
+              state: "freezetime"
+            - condition: state
+              entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team
+              state: "CT"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.cozylife_8nqa_light_2
+              data:
+                brightness_pct: 100
+                hs_color: [240, 100]
+                transition: 1.0
+
+        - conditions:
+            - condition: state
+              entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_phase
+              state: "freezetime"
+            - condition: state
+              entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team
+              state: "T"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.cozylife_8nqa_light_2
+              data:
+                brightness_pct: 100
+                hs_color: [120, 100]
+                transition: 1.0
+
+        - conditions:
+            - condition: state
+              entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team
+              state: "CT"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.cozylife_8nqa_light_2
+              data:
+                brightness_pct: 35
+                hs_color: [240, 100]
+                transition: 1.0
+
+        - conditions:
+            - condition: state
+              entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team
+              state: "T"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.cozylife_8nqa_light_2
+              data:
+                brightness_pct: 35
+                hs_color: [120, 100]
+                transition: 1.0
+
+      default:
+        - service: light.turn_off
+          target:
+            entity_id: light.cozylife_8nqa_light_2
+
+cs2_bridge_burning_flicker_tvled:
+  alias: CS2 Bridge - Burning Flicker TVLED
+  mode: restart
+  sequence:
+    - repeat:
+        while:
+          - condition: template
+            value_template: >
+              {{ states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_burning') | float(0) > 0
+                 and states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_flashed') | float(0) < 1
+                 and states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_light_mode') | lower not in ['blink']
+                 and states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_bomb') | lower not in ['defused', 'exploded'] }}
+        sequence:
+          - service: light.turn_on
+            target:
+              entity_id: light.cozylife_8nqa_light_2
+            data:
+              brightness_pct: 100
+              rgb_color: [255, 80, 0]
+          - delay:
+              milliseconds: 280
+          - service: light.turn_on
+            target:
+              entity_id: light.cozylife_8nqa_light_2
+            data:
+              brightness_pct: 70
+              rgb_color: [255, 20, 0]
+          - delay:
+              milliseconds: 220
+          - service: light.turn_on
+            target:
+              entity_id: light.cozylife_8nqa_light_2
+            data:
+              brightness_pct: 95
+              rgb_color: [255, 120, 0]
+          - delay:
+              milliseconds: 180
+          - service: light.turn_on
+            target:
+              entity_id: light.cozylife_8nqa_light_2
+            data:
+              brightness_pct: 60
+              rgb_color: [190, 10, 0]
+          - delay:
+              milliseconds: 280
+
+cs2_bridge_low_hp_team_breath_tvled:
+  alias: CS2 Bridge - Low HP Team Breath TVLED
+  mode: restart
+  sequence:
+    - repeat:
+        while:
+          - condition: numeric_state
+            entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+            above: 15
+          - condition: numeric_state
+            entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+            below: 30
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: state
+                    entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team
+                    state: "CT"
+                sequence:
+                  - service: light.turn_on
+                    target:
+                      entity_id: light.cozylife_8nqa_light_2
+                    data:
+                      brightness_pct: 35
+                      hs_color: [240, 100]
+                      transition: 1.5
+                  - delay:
+                      milliseconds: 1600
+                  - service: light.turn_on
+                    target:
+                      entity_id: light.cozylife_8nqa_light_2
+                    data:
+                      brightness_pct: 5
+                      hs_color: [240, 100]
+                      transition: 1.0
+                  - delay:
+                      milliseconds: 1100
+
+              - conditions:
+                  - condition: state
+                    entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_team
+                    state: "T"
+                sequence:
+                  - service: light.turn_on
+                    target:
+                      entity_id: light.cozylife_8nqa_light_2
+                    data:
+                      brightness_pct: 35
+                      hs_color: [120, 100]
+                      transition: 1.5
+                  - delay:
+                      milliseconds: 1600
+                  - service: light.turn_on
+                    target:
+                      entity_id: light.cozylife_8nqa_light_2
+                    data:
+                      brightness_pct: 5
+                      hs_color: [120, 100]
+                      transition: 1.0
+                  - delay:
+                      milliseconds: 1100
+
+            default:
+              - delay:
+                  milliseconds: 500
+
+cs2_bridge_critical_hp_red_breath_tvled:
+  alias: CS2 Bridge - Critical HP Red Breath TVLED
+  mode: restart
+  sequence:
+    - repeat:
+        while:
+          - condition: numeric_state
+            entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+            above: 0
+          - condition: numeric_state
+            entity_id: sensor.cs2_gsi_bridge_cs2_gsi_bridge_player_state_health
+            below: 16
+        sequence:
+          - service: light.turn_on
+            target:
+              entity_id: light.cozylife_8nqa_light_2
+            data:
+              brightness_pct: 100
+              hs_color: [0, 100]
+              transition: 1.5
+          - delay:
+              milliseconds: 1600
+          - service: light.turn_on
+            target:
+              entity_id: light.cozylife_8nqa_light_2
+            data:
+              brightness_pct: 5
+              hs_color: [0, 100]
+              transition: 1.0
+          - delay:
+              milliseconds: 1100
+
+cs2_bridge_defused_blue_blink_tvled:
+  alias: CS2 Bridge - Defused Blue Blink TVLED
+  mode: restart
+  sequence:
+    - repeat:
+        count: 5
+        sequence:
+          - service: light.turn_on
+            target:
+              entity_id: light.cozylife_8nqa_light_2
+            data:
+              brightness_pct: 100
+              hs_color: [240, 100]
+          - delay:
+              milliseconds: 300
+          - service: light.turn_off
+            target:
+              entity_id: light.cozylife_8nqa_light_2
+          - delay:
+              milliseconds: 300
+    - service: script.turn_on
+      target:
+        entity_id: script.cs2_bridge_restore_context_tvled
