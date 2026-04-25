@@ -1,5 +1,5 @@
 name: "CS2 GSI Bridge (Python Full State)"
-version: "0.3.9"
+version: "0.3.10"
 slug: "cs2_gsi_bridge_py"
 description: "Receives Counter-Strike 2 GSI posts, publishes every incoming state to MQTT, and exposes derived light pulse/color entities."
 url: "https://github.com/YOUR_GITHUB_USERNAME/cs2-python-bridge-repo-v3"
