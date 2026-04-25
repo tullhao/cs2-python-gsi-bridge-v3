@@ -289,7 +289,7 @@ def derive_light_state(data: dict[str, Any], now: float | None = None) -> dict[s
     if planted:
         time_left = infer_time_left(now, _bomb_planted_monotonic)
 
-        if time_left <= 1.15:
+        if time_left <= 2.0:
             light_mode = "finale"
             light_color = "red"
             blink_interval_ms = 0
