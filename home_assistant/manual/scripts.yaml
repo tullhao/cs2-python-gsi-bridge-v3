@@ -46,7 +46,7 @@ cs2_bridge_apply_tvled_state:
           sequence:
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: 12
                 hs_color: [240, 100]
@@ -57,7 +57,7 @@ cs2_bridge_apply_tvled_state:
           sequence:
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: 12
                 hs_color: [120, 100]
@@ -74,7 +74,7 @@ cs2_bridge_apply_tvled_state:
           sequence:
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: 100
                 hs_color: [240, 100]
@@ -85,7 +85,7 @@ cs2_bridge_apply_tvled_state:
           sequence:
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: 100
                 hs_color: [120, 100]
@@ -96,7 +96,7 @@ cs2_bridge_apply_tvled_state:
           sequence:
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: 35
                 hs_color: [240, 100]
@@ -107,7 +107,7 @@ cs2_bridge_apply_tvled_state:
           sequence:
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: 35
                 hs_color: [120, 100]
@@ -118,7 +118,7 @@ cs2_bridge_apply_tvled_state:
           sequence:
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: 35
                 hs_color: [240, 100]
@@ -129,7 +129,7 @@ cs2_bridge_apply_tvled_state:
           sequence:
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: 35
                 hs_color: [120, 100]
@@ -137,7 +137,7 @@ cs2_bridge_apply_tvled_state:
       default:
         - service: light.turn_off
           target:
-            entity_id: light.cozylife_8nqa_light_2
+            entity_id: light.cs2gsi
 
 cs2_bridge_restore_context_tvled:
   alias: CS2 Bridge - Restore Context TVLED
@@ -173,7 +173,7 @@ cs2_bridge_restore_context_tvled:
                   sequence:
                     - service: light.turn_on
                       target:
-                        entity_id: light.cozylife_8nqa_light_2
+                        entity_id: light.cs2gsi
                       data:
                         brightness_pct: 100
                         rgb_color: [255, 0, 0]
@@ -183,7 +183,7 @@ cs2_bridge_restore_context_tvled:
                   sequence:
                     - service: light.turn_off
                       target:
-                        entity_id: light.cozylife_8nqa_light_2
+                        entity_id: light.cs2gsi
 
         - conditions:
             - condition: template
@@ -197,7 +197,7 @@ cs2_bridge_restore_context_tvled:
           sequence:
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: 80
                 rgb_color: [255, 80, 0]
@@ -214,7 +214,7 @@ cs2_bridge_restore_context_tvled:
           sequence:
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: 12
                 hs_color: [240, 100]
@@ -226,7 +226,7 @@ cs2_bridge_restore_context_tvled:
           sequence:
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: 12
                 hs_color: [120, 100]
@@ -242,7 +242,7 @@ cs2_bridge_restore_context_tvled:
           sequence:
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: 50
                 hs_color: [0, 100]
@@ -269,7 +269,7 @@ cs2_bridge_restore_context_tvled:
                   sequence:
                     - service: light.turn_on
                       target:
-                        entity_id: light.cozylife_8nqa_light_2
+                        entity_id: light.cs2gsi
                       data:
                         brightness_pct: 35
                         hs_color: [240, 100]
@@ -281,7 +281,7 @@ cs2_bridge_restore_context_tvled:
                   sequence:
                     - service: light.turn_on
                       target:
-                        entity_id: light.cozylife_8nqa_light_2
+                        entity_id: light.cs2gsi
                       data:
                         brightness_pct: 35
                         hs_color: [120, 100]
@@ -302,7 +302,7 @@ cs2_bridge_restore_context_tvled:
           sequence:
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: 100
                 hs_color: [240, 100]
@@ -318,7 +318,7 @@ cs2_bridge_restore_context_tvled:
           sequence:
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: 100
                 hs_color: [120, 100]
@@ -331,7 +331,7 @@ cs2_bridge_restore_context_tvled:
           sequence:
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: 35
                 hs_color: [240, 100]
@@ -344,7 +344,7 @@ cs2_bridge_restore_context_tvled:
           sequence:
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: 35
                 hs_color: [120, 100]
@@ -353,7 +353,7 @@ cs2_bridge_restore_context_tvled:
       default:
         - service: light.turn_off
           target:
-            entity_id: light.cozylife_8nqa_light_2
+            entity_id: light.cs2gsi
 
 cs2_bridge_burning_flicker_tvled:
   alias: CS2 Bridge - Burning Flicker TVLED
@@ -370,7 +370,7 @@ cs2_bridge_burning_flicker_tvled:
         sequence:
           - service: light.turn_on
             target:
-              entity_id: light.cozylife_8nqa_light_2
+              entity_id: light.cs2gsi
             data:
               brightness_pct: 100
               rgb_color: [255, 80, 0]
@@ -378,7 +378,7 @@ cs2_bridge_burning_flicker_tvled:
               milliseconds: 280
           - service: light.turn_on
             target:
-              entity_id: light.cozylife_8nqa_light_2
+              entity_id: light.cs2gsi
             data:
               brightness_pct: 70
               rgb_color: [255, 20, 0]
@@ -386,7 +386,7 @@ cs2_bridge_burning_flicker_tvled:
               milliseconds: 220
           - service: light.turn_on
             target:
-              entity_id: light.cozylife_8nqa_light_2
+              entity_id: light.cs2gsi
             data:
               brightness_pct: 95
               rgb_color: [255, 120, 0]
@@ -394,7 +394,7 @@ cs2_bridge_burning_flicker_tvled:
               milliseconds: 180
           - service: light.turn_on
             target:
-              entity_id: light.cozylife_8nqa_light_2
+              entity_id: light.cs2gsi
             data:
               brightness_pct: 60
               rgb_color: [190, 10, 0]
@@ -422,7 +422,7 @@ cs2_bridge_low_hp_team_breath_tvled:
                 sequence:
                   - service: light.turn_on
                     target:
-                      entity_id: light.cozylife_8nqa_light_2
+                      entity_id: light.cs2gsi
                     data:
                       brightness_pct: 35
                       hs_color: [240, 100]
@@ -431,7 +431,7 @@ cs2_bridge_low_hp_team_breath_tvled:
                       milliseconds: 1600
                   - service: light.turn_on
                     target:
-                      entity_id: light.cozylife_8nqa_light_2
+                      entity_id: light.cs2gsi
                     data:
                       brightness_pct: 5
                       hs_color: [240, 100]
@@ -446,7 +446,7 @@ cs2_bridge_low_hp_team_breath_tvled:
                 sequence:
                   - service: light.turn_on
                     target:
-                      entity_id: light.cozylife_8nqa_light_2
+                      entity_id: light.cs2gsi
                     data:
                       brightness_pct: 35
                       hs_color: [120, 100]
@@ -455,7 +455,7 @@ cs2_bridge_low_hp_team_breath_tvled:
                       milliseconds: 1600
                   - service: light.turn_on
                     target:
-                      entity_id: light.cozylife_8nqa_light_2
+                      entity_id: light.cs2gsi
                     data:
                       brightness_pct: 5
                       hs_color: [120, 100]
@@ -482,7 +482,7 @@ cs2_bridge_critical_hp_red_breath_tvled:
         sequence:
           - service: light.turn_on
             target:
-              entity_id: light.cozylife_8nqa_light_2
+              entity_id: light.cs2gsi
             data:
               brightness_pct: 100
               hs_color: [0, 100]
@@ -491,7 +491,7 @@ cs2_bridge_critical_hp_red_breath_tvled:
               milliseconds: 1600
           - service: light.turn_on
             target:
-              entity_id: light.cozylife_8nqa_light_2
+              entity_id: light.cs2gsi
             data:
               brightness_pct: 5
               hs_color: [0, 100]
@@ -508,7 +508,7 @@ cs2_bridge_defused_blue_blink_tvled:
         sequence:
           - service: light.turn_on
             target:
-              entity_id: light.cozylife_8nqa_light_2
+              entity_id: light.cs2gsi
             data:
               brightness_pct: 100
               hs_color: [240, 100]
@@ -516,7 +516,7 @@ cs2_bridge_defused_blue_blink_tvled:
               milliseconds: 300
           - service: light.turn_off
             target:
-              entity_id: light.cozylife_8nqa_light_2
+              entity_id: light.cs2gsi
           - delay:
               milliseconds: 300
     - service: script.turn_on

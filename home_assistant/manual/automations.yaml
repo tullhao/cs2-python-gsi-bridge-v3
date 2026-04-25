@@ -32,7 +32,7 @@
                 milliseconds: 150
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: >
                   {% if states('sensor.cs2_gsi_bridge_cs2_gsi_bridge_round_phase') == 'freezetime' %}
@@ -97,7 +97,7 @@
                   - script.cs2_bridge_burning_flicker_tvled
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: 100
                 rgb_color: [255, 0, 0]
@@ -123,7 +123,7 @@
                   - script.cs2_bridge_burning_flicker_tvled
             - service: light.turn_off
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
 
       default:
         - stop: Nicht im Bombtimer-Modus
@@ -144,7 +144,7 @@
           - script.cs2_bridge_burning_flicker_tvled
     - service: light.turn_on
       target:
-        entity_id: light.cozylife_8nqa_light_2
+        entity_id: light.cs2gsi
       data:
         brightness_pct: 100
         rgb_color: [255, 0, 0]
@@ -229,7 +229,7 @@
           - script.cs2_bridge_restore_context_tvled
     - service: light.turn_on
       target:
-        entity_id: light.cozylife_8nqa_light_2
+        entity_id: light.cs2gsi
       data:
         brightness_pct: 100
         color_temp_kelvin: 6500
@@ -348,7 +348,7 @@
           sequence:
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: 100
                 hs_color: [0, 100]
@@ -360,7 +360,7 @@
           sequence:
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: 100
                 hs_color: [240, 100]
@@ -372,7 +372,7 @@
           sequence:
             - service: light.turn_on
               target:
-                entity_id: light.cozylife_8nqa_light_2
+                entity_id: light.cs2gsi
               data:
                 brightness_pct: 100
                 hs_color: [120, 100]
@@ -380,7 +380,7 @@
       default:
         - service: light.turn_on
           target:
-            entity_id: light.cozylife_8nqa_light_2
+            entity_id: light.cs2gsi
           data:
             brightness_pct: 100
             color_temp_kelvin: 4500
